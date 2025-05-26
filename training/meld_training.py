@@ -223,5 +223,11 @@ if __name__ == "__main__":
         batch_size=32
     )
 
-
+    for batch in train_loader:
+        print(batch['text_inputs']['input_ids'])
+        print(batch['video_frames'].shape)
+        print(batch['audio_features'].shape)
+        print(batch['emotion_label'])
+        print(batch['sentiment_label'])
+        break  # Just to test the first batch
 
