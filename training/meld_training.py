@@ -131,29 +131,50 @@ class MELDDataset(Dataset):
     
     # Altering the getitem function
     def __getitem__(self, idx):
+        if isinstance(idx, torch.Tensor):
+            idx = idx.item()
         row =self.data.iloc[idx]
-        video_file_name = f"""dia{row['Dialogue_ID']}_utt{row['Utterance_ID']}.mp4"""
-        path = os.path.join(self.video_dir, video_file_name)
 
-        video_path = os.path.exists(path)
+        try:
+            video_file_name = f"""dia{row['Dialogue_ID']}_utt{row['Utterance_ID']}.mp4"""
+            path = os.path.join(self.video_dir, video_file_name)
 
-        if not video_path:
-            raise FileNotFoundError(f"Video file {video_file_name} not found in {self.video_dir}")
+            video_path_exists = os.path.exists(path)
+
+            if not video_path_exists:
+                raise FileNotFoundError(f"Video file {video_file_name} not found in {self.video_dir}")
+            
+            # Tokenizing the text
+            text = self.tokenizer(row['Utterance'],
+                                padding='max_length',
+                                truncation=True,
+                                max_length=128,
+                                return_tensors='pt')
+            
+            # Extracting video frames 
+            video_frames = self._load_video_frames(path)
+
+            # Extracting audio features
+            auido_features = self._audio_extract_features(path)
+
+            # Getting the emotion and sentiment labels
+            emotion_label = self.emotions[row['Emotion'].lower()]
+            sentiment_label = self.sentiments_map[row['Sentiment'].lower()]
+
+            return {
+                'text_inputs' : {
+                    'input_ids' : text['input_ids'].squeeze(),
+                    'attention_mask' : text['attention_mask'].squeeze(),
+                },
+                'video_frames' : video_frames,
+                'audio_features' : auido_features,
+                'emotion_label' : torch.tensor(emotion_label),
+                'sentiment_label' : torch.tensor(sentiment_label),
+            }
+        except Exception as e:
+            raise ValueError(f"Error occured during processing {path}: {e}")
+
         
-        # Tokenizing the text
-        text = self.tokenizer(row['Utterance'],
-                              padding='max_length',
-                              truncation=True,
-                              max_length=128,
-                              return_tensors='pt')
-        
-        # Extracting video frames 
-        #video_frames = self._load_video_frames(path)
-        auido_features = self._audio_extract_features(path)
-        print(auido_features)
-        
-        
-    
 if __name__ == "__main__":
     # Example usage
     csv_path = Path(".") / "dataset" / "dev" / "dev_sent_emo.csv"
