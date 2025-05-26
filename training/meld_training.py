@@ -1,7 +1,8 @@
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 import torch
 import pandas as pd
 from pathlib import Path
+import torch.utils.data.dataloader
 from transformers import AutoTokenizer
 import os
 import cv2
@@ -173,15 +174,54 @@ class MELDDataset(Dataset):
             }
         except Exception as e:
             raise ValueError(f"Error occured during processing {path}: {e}")
+        
+def collate_fn(batch):
+    # filter out any None values
+    batch = list(filter(None, batch))
+    return torch.utils.data.dataloader.default_collate(batch)
 
+
+def prepare_dataloaders(train_csv, train_video_dir,
+                        dev_csv, dev_video_dir,
+                        test_csv, test_video_dir,
+                        batch_size=32):
+    train_dataset = MELDDataset(train_csv, train_video_dir)
+    test_dataset = MELDDataset(test_csv, test_video_dir)
+    dev_dataset = MELDDataset(dev_csv, dev_video_dir)
+
+    train_dataloader = DataLoader(train_dataset,
+                                  batch_size=batch_size,
+                                  shuffle=True,
+                                  collate_fn=collate_fn)
+    test_dataloader = DataLoader(test_dataset,
+                                  batch_size=batch_size,
+                                  shuffle=False,
+                                  collate_fn=collate_fn)
+    dev_dataloader = DataLoader(dev_dataset,
+                                  batch_size=batch_size,
+                                  shuffle=False,
+                                  collate_fn=collate_fn)
+    
+    return train_dataloader, test_dataloader, dev_dataloader
         
 if __name__ == "__main__":
     # Example usage
-    csv_path = Path(".") / "dataset" / "dev" / "dev_sent_emo.csv"
-    video_dir = Path(".") / "dataset" / "dev" / "dev_splits_complete"
-    dataset = MELDDataset(csv_path, 
-                          video_dir)
-    
-    print(dataset[0])
+    dev_csv_path = Path(".") / "dataset" / "dev" / "dev_sent_emo.csv"
+    dev_video_dir = Path(".") / "dataset" / "dev" / "dev_splits_complete"
+    train_csv_path = Path(".") / "dataset" / "train" / "train_sent_emo.csv"
+    train_video_dir = Path(".") / "dataset" / "train" / "dev_splits_complete"
+    test_csv_path = Path(".") / "dataset" / "test" / "test_sent_emo.csv"
+    test_video_dir = Path(".") / "dataset" / "test" / "output_repeated_splits_test"
+
+    train_loader, test_loader, dev_loader = prepare_dataloaders(
+        train_csv=train_csv_path,
+        train_video_dir=train_video_dir,
+        dev_csv=dev_csv_path,
+        dev_video_dir=dev_video_dir,
+        test_csv=test_csv_path,
+        test_video_dir=test_video_dir,
+        batch_size=32
+    )
+
 
 
