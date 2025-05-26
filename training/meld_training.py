@@ -23,7 +23,8 @@ class MELDDataset(Dataset):
             "joy": 2,
             "anger": 3,
             "fear": 4,
-            "disgust": 5
+            "disgust": 5,
+            "surprise" : 6
         }
 
         self.sentiments_map = {
@@ -75,7 +76,6 @@ class MELDDataset(Dataset):
         return torch.FloatTensor(np.array(frames)).permute(0, 3, 1, 2) # Convert the normal array to np array and rearrange dimensions to (frames, channels, height, width)
     
     def _audio_extract_features(self, video_path):
-        print(f"Extracting audio features from {video_path}")
         audio_path = video_path.replace('.mp4', '.wav')  #replace video extension with audio extension
         try:
             subprocess.run([
@@ -213,14 +213,20 @@ if __name__ == "__main__":
     test_csv_path = Path(".") / "dataset" / "test" / "test_sent_emo.csv"
     test_video_dir = Path(".") / "dataset" / "test" / "output_repeated_splits_test"
 
+    # train_loader, test_loader, dev_loader = prepare_dataloaders(
+    #     train_csv=train_csv_path,
+    #     train_video_dir=train_video_dir,
+    #     dev_csv=dev_csv_path,
+    #     dev_video_dir=dev_video_dir,
+    #     test_csv=test_csv_path,
+    #     test_video_dir=test_video_dir,
+    #     batch_size=32
+    # )
+
     train_loader, test_loader, dev_loader = prepare_dataloaders(
-        train_csv=train_csv_path,
-        train_video_dir=train_video_dir,
-        dev_csv=dev_csv_path,
-        dev_video_dir=dev_video_dir,
-        test_csv=test_csv_path,
-        test_video_dir=test_video_dir,
-        batch_size=32
+        '../dataset/train/train_sent_emo.csv', '../dataset/train/train_splits',
+        '../dataset/dev/dev_sent_emo.csv', '../dataset/dev/dev_splits_complete',
+        '../dataset/test/test_sent_emo.csv', '../dataset/test/output_repeated_splits_test'  
     )
 
     for batch in train_loader:
