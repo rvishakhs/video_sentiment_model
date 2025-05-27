@@ -206,23 +206,6 @@ def prepare_dataloaders(train_csv, train_video_dir,
         
 if __name__ == "__main__":
     # Example usage
-    dev_csv_path = Path(".") / "dataset" / "dev" / "dev_sent_emo.csv"
-    dev_video_dir = Path(".") / "dataset" / "dev" / "dev_splits_complete"
-    train_csv_path = Path(".") / "dataset" / "train" / "train_sent_emo.csv"
-    train_video_dir = Path(".") / "dataset" / "train" / "dev_splits_complete"
-    test_csv_path = Path(".") / "dataset" / "test" / "test_sent_emo.csv"
-    test_video_dir = Path(".") / "dataset" / "test" / "output_repeated_splits_test"
-
-    # train_loader, test_loader, dev_loader = prepare_dataloaders(
-    #     train_csv=train_csv_path,
-    #     train_video_dir=train_video_dir,
-    #     dev_csv=dev_csv_path,
-    #     dev_video_dir=dev_video_dir,
-    #     test_csv=test_csv_path,
-    #     test_video_dir=test_video_dir,
-    #     batch_size=32
-    # )
-
     train_loader, test_loader, dev_loader = prepare_dataloaders(
         '../dataset/train/train_sent_emo.csv', '../dataset/train/train_splits',
         '../dataset/dev/dev_sent_emo.csv', '../dataset/dev/dev_splits_complete',
