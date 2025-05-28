@@ -184,5 +184,13 @@ class Multimodel_trainer(nn.Module):
             {'params' : model.sentiment_classifier.parameters(), 'lr': 5e-4},
         ], weight_decay=1e-5)
 
+        # Setting the dynamic training scheduler
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode="min",
+            factor=0.1,
+            patience=2
+        )
+
 
 #if __name__ == "__main__":
