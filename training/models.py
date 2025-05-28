@@ -158,3 +158,31 @@ class MultimodalSentimentalModel(nn.Module):
             'emotion_logits': emotion_logits,
             'sentiment_logits': sentiment_logits
         }
+    
+class Multimodel_trainer(nn.Module):
+    def __init__(self, model, train_loader, val_loader, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.model = model
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+
+        # Log the datset sizes
+        train_sizes = len(train_loader.dataset)
+        val_sizes = len(val_loader.dataset)
+        print("\nDataset Sizes:")
+        print(f"Train Dataset Size: {train_sizes}")
+        print(f"Validation Dataset Size: {val_sizes}\n")
+        print(f"Batches per epoches: {len(train_loader)}")
+
+        # Setting the optimizer and loss functions
+        self.optimizer = torch.optim.AdamW([
+            {'params' : model.text_encoder.parameters(), 'lr': 8e-6},
+            {'params' : model.video_encoder.parameters(), 'lr': 8e-5},
+            {'params' : model.audio_encoder.parameters(), 'lr': 8e-5},
+            {'params' : model.fusion_layer.parameters(), 'lr': 5e-4},
+            {'params' : model.emotion_classifier.parameters(), 'lr': 5e-4},
+            {'params' : model.sentiment_classifier.parameters(), 'lr': 5e-4},
+        ], weight_decay=1e-5)
+
+
+#if __name__ == "__main__":
