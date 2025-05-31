@@ -6,7 +6,7 @@ from sklearn.metrics import precision_score, accuracy_score
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 import os
-
+import tensorboard
 
 class TextEncoder(nn.Module):    
     def __init__(self):
