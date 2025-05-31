@@ -1,7 +1,6 @@
 from models import MultimodalSentimentalModel
 
 
-
 def count_params(model):
     """
     Count the number of trainable parameters in a PyTorch model.
@@ -34,7 +33,7 @@ def count_params(model):
                 params_dict['video_encoder'] += param_count
             elif 'audio_encoder' in name:
                 params_dict['audio_encoder'] += param_count
-            elif 'fusifusion_layer' in name: 
+            elif 'fusion_layer' in name: 
                 params_dict['fusion_module'] += param_count
             elif 'emotion_classifier' in name:
                 params_dict['emotional_classifier'] += param_count
