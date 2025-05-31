@@ -17,6 +17,7 @@ dependencies = [
     "soundfile (>=0.13.1,<0.14.0)",
     "scikit-learn (>=1.6.1,<2.0.0)",
     "tensorboard (>=2.19.0,<3.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
 ]
 
 [tool.poetry]
