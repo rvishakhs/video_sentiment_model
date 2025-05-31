@@ -192,5 +192,52 @@ class Multimodel_trainer(nn.Module):
             patience=2
         )
 
+        self.emotion_criterion = nn.CrossEntropyLoss(
+            label_smoothing=0.05
+        )
+
+        self.sentiment_criterion = nn.CrossEntropyLoss(
+            label_smoothing=0.05
+        )
+    def train_step(self):
+        self.model.train()
+        running_loss = {
+            'total' : 0,
+            'emotion' : 0,
+            'sentiment' : 0
+        }
+
+        for batch in self.train_loader:
+            # Set al the tensors into one device 
+            device = next(self.model.parameters()).device
+            text_inputs = {
+                'input_ids' : batch['text_inputs']['input_ids'].to(device),
+                'attention_mask' : batch['text_inputs']['attention_mask'].to(device)
+            }
+            video_frames = batch['video_frames'].to(device),
+            audio_features = batch['audio_features'].to(device),
+            emotion_label = batch['emotion_label'].to(device),
+            sentiment_label = batch['sentiment_label'].to(device)
+
+            # Zero gradient mode
+            self.optimizer.zero_grad()
+
+            # Forward pass
+            outputs = self.model(text_inputs, video_frames, audio_features)
+
+            # Calculate the losses using cross entropy losses 
+            emotional_loss = self.emotion_criterion(
+                outputs['emotion_logits'], emotion_label
+            )
+
+            sentimental_loss = self.emotion_criterion(
+                outputs['emotion_logits'], emotion_label
+            )
+
+            total_loss = emotional_loss + sentimental_loss
+
+            
+
+
 
 #if __name__ == "__main__":
