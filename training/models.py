@@ -236,7 +236,39 @@ class Multimodel_trainer(nn.Module):
 
             total_loss = emotional_loss + sentimental_loss
 
-            
+            # Backward pass
+            total_loss.backward()
+
+            # Gradient clipping to avoid exploding gradients
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), max_norm=1.0
+            )
+
+            self.optimizer.step()
+
+            # Update the running loss
+            running_loss['total'] += total_loss.item()
+            running_loss['emotion'] += emotional_loss.item()
+            running_loss['sentiment'] += sentimental_loss.item()
+
+        return {k: v/len(self.train_loader) for k, v in running_loss.items()}
+
+    def evaluate(self, dataloader, phase="val");
+        # Setting model in evaluation mode
+        self.model.eval()
+        losses = {
+            'total' : 0,
+            'emotion' : 0,
+            'sentiment' : 0
+        }
+
+        all_emotion_preds = []
+        all_emootion_labels = []
+        all_sentiment_preds = []
+        all_sentiment_labels = []
+
+        
+
 
 
 
