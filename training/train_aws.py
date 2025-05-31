@@ -74,12 +74,13 @@ def main():
     metrics_data = {
         "train_losses" : [],
         "validation_losses" : [],
+        "test_losses" : [],
         "epochs" : [],
     }
 
     for epoch in tqdm(range(args.epochs), desc="Training Epochs"):
         training_loss = trainer.train_step()
-        eval_loss, metrics = trainer.evaluate()
+        eval_loss, metrics = trainer.evaluate(dev_loader)
 
         # Track the metrics 
         metrics_data["train_losses"].append(training_loss["total"])
@@ -97,6 +98,38 @@ def main():
                 {"Name": "validation: sentimental_accuracy", "Value":metrics["sentimental_accuracy"]},
             ]
         }))
+
+        # Track the GPU memory usage in each epoch
+        if torch.cuda.is_available():
+            memory_used = torch.cuda.max_memory_allocated()
+            print(f"Peak GPU Usage: {memory_used / (1024 ** 3):.2f} GB")
+
+        # Save the model if the validation loss improves
+        if eval_loss["total"] < best_trainng_loss:
+            best_trainng_loss = eval_loss["total"]
+            torch.save(model.state_dict(), os.path.join(args.model_dir, 'model.pth'))    
+
+    # Evaluating on test dataset
+    test_loss, test_metrics = trainer.evaluate(test_loader)
+    metrics_data["test_losses"].append(test_loss["total"])
+
+    # Log test metrics in sagemaker format 
+    print(json.dumps({
+        "metrics" : [
+            {"Name": "test_loss", "Value": test_loss["total"]},
+            {"Name": "test: Emotion_precision", "Value":test_metrics["emotion_precision"]},
+            {"Name": "test: sentimental_precision", "Value":test_metrics["sentimental_precision"]},
+            {"Name": "test: emotion_accuracy", "Value":test_metrics["emotion_accuracy"]},
+            {"Name": "test: sentimental_accuracy", "Value":test_metrics["sentimental_accuracy"]},
+        ]
+    }))
+
+    
+
+
+
+
+    
 
 
 
