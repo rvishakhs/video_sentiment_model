@@ -2,6 +2,10 @@ import torch.nn as nn
 import torch
 from transformers import BertModel
 from torchvision import models as vision_models
+from sklearn.metrics import precision_score, accuracy_score
+from torch.utils.tensorboard import SummaryWriter
+import datetime
+import os
 
 
 class TextEncoder(nn.Module):    
@@ -174,6 +178,13 @@ class Multimodel_trainer(nn.Module):
         print(f"Validation Dataset Size: {val_sizes}\n")
         print(f"Batches per epoches: {len(train_loader)}")
 
+        timestamp = datetime.now().strftime("%b%b_%H-%M-%S")
+        base_dir = '/opt/ml/output/tensorboard' if 'SM_MODEL_DIR' in os.environ else 'runs'
+        log_dir = f"{base_dir}/run_{timestamp}"
+
+        self.writer = SummaryWriter(log_dir=log_dir)
+        self.global_step = 0
+
         # Setting the optimizer and loss functions
         self.optimizer = torch.optim.AdamW([
             {'params' : model.text_encoder.parameters(), 'lr': 8e-6},
@@ -192,6 +203,8 @@ class Multimodel_trainer(nn.Module):
             patience=2
         )
 
+        self.current_train_losses = None
+
         self.emotion_criterion = nn.CrossEntropyLoss(
             label_smoothing=0.05
         )
@@ -199,6 +212,51 @@ class Multimodel_trainer(nn.Module):
         self.sentiment_criterion = nn.CrossEntropyLoss(
             label_smoothing=0.05
         )
+
+    def log_metrics(self, losses, metrics, phase="train"):
+        if phase == "train":
+            self.current_train_losses = losses
+        else: # validation phase
+            self.writer.add_scalar(
+                'loss/total/train', self.current_train_losses['total'], self.global_step
+            )
+            self.writer.add_scalar(
+                'loss/total/val', losses['total'], self.global_step
+            )
+            # Emotion metrics
+            self.writer.add_scalar(
+                'loss/emotion/train', self.current_train_losses['emotion'], self.global_step
+            )
+            self.writer.add_scalar(
+                'loss/emotion/val', losses['emotion'], self.global_step
+            )
+            # Sentimental metrics
+            self.writer.add_scalar(
+                'loss/sentiment/train', self.current_train_losses['sentiment'], self.global_step
+            )
+            self.writer.add_scalar(
+                'loss/sentiment/val', losses['sentiment'], self.global_step
+            )
+
+        if metrics: 
+            # Emotion metrics
+            self.writer.add_scalar(
+                f'{phase}/emotion_precison', metrics['emotion_precision'], self.global_step
+            )
+            self.writer.add_scalar(
+                f'{phase}/emotion_accuracy', metrics['emotion_accuracy'], self.global_step
+            )
+            self.writer.add_scalar(
+                f'{phase}/sentiment_precison', metrics['sentimental_precision'], self.global_step
+            )
+            self.writer.add_scalar(
+                f'{phase}/sentiment_accuracy', metrics['sentimental_accuracy'], self.global_step
+            )
+
+
+
+
+
     def train_step(self):
         self.model.train()
         running_loss = {
@@ -230,8 +288,8 @@ class Multimodel_trainer(nn.Module):
                 outputs['emotion_logits'], emotion_label
             )
 
-            sentimental_loss = self.emotion_criterion(
-                outputs['emotion_logits'], emotion_label
+            sentimental_loss = self.sentiment_criterion(
+                outputs['sentiment_logits'], sentiment_label
             )
 
             total_loss = emotional_loss + sentimental_loss
@@ -251,9 +309,14 @@ class Multimodel_trainer(nn.Module):
             running_loss['emotion'] += emotional_loss.item()
             running_loss['sentiment'] += sentimental_loss.item()
 
+            # Log the metrics
+            self.log_metrics(running_loss, None, phase="train")
+            
+            self.global_step += 1
+
         return {k: v/len(self.train_loader) for k, v in running_loss.items()}
 
-    def evaluate(self, dataloader, phase="val");
+    def evaluate(self, dataloader, phase="val"):
         # Setting model in evaluation mode
         self.model.eval()
         losses = {
@@ -267,7 +330,85 @@ class Multimodel_trainer(nn.Module):
         all_sentiment_preds = []
         all_sentiment_labels = []
 
+        with torch.inference_mode():
+            for batch in dataloader:
+                # Set all the tensors into one device
+                device = next(self.model.parameters()).device
+                text_inputs = {
+                    'input_ids' : batch['text_inputs']['input_ids'].to(device),
+                    'attention_mask' : batch['text_inputs']['attention_mask'].to(device)
+                }
+                video_frames = batch['video_frames'].to(device),
+                audio_features = batch['audio_features'].to(device),
+                emotion_label = batch['emotion_label'].to(device),
+                sentiment_label = batch['sentiment_label'].to(device)
+
+                # Forward pass
+                outputs = self.model(text_inputs, video_frames, audio_features)
+
+                # Calculate the losses using cross entropy losses 
+                emotional_loss = self.emotion_criterion(
+                    outputs['emotion_logits'], emotion_label
+                )
+
+                sentimental_loss = self.sentiment_criterion(
+                    outputs['sentiment_logits'], sentiment_label
+                )
+
+                total_loss = emotional_loss + sentimental_loss
+
+                all_emotion_preds.extend(
+                    outputs['emotion_logits'].argmax(dim=1).cpu().numpy()
+                )
+                all_emootion_labels.extend(emotion_label.cpu().numpy())
+                all_sentiment_preds.extend(
+                    outputs['sentiment_logits'].argmax(dim=1).cpu().numpy()
+                )
+                all_sentiment_labels.extend(sentiment_label.cpu().numpy())
+
+                # Update the running loss
+                losses['total'] += total_loss.item()
+                losses['emotion'] += emotional_loss.item()
+                losses['sentiment'] += sentimental_loss.item()
         
+        avg_loss = {k: v/len(dataloader) for k, v in losses.items()}
+
+        # compute the metrics
+        emotion_precision = precision_score(
+            all_emootion_labels, all_emotion_preds, average='weighted'
+        )
+        emotion_accuracy = accuracy_score(
+            all_emootion_labels, all_emotion_preds
+        )
+
+        sentimental_precision = precision_score(
+            all_sentiment_labels, all_sentiment_preds, average='weighted'
+        )
+        sentimental_accuracy = accuracy_score(
+            all_sentiment_labels, all_sentiment_preds
+        )
+
+        # Log the metrics
+        self.log_metrics(avg_loss, {
+            'emotion_precision': emotion_precision,
+            'emotion_accuracy': emotion_accuracy,
+            'sentimental_precision': sentimental_precision,
+            'sentimental_accuracy': sentimental_accuracy
+        }, phase=phase)
+
+
+        # step scheduler for maintaining the learning rate if the there is no much difference in learning over two more epochs 
+        if phase == "val":
+            self.scheduler.step(avg_loss['total'])
+
+        return avg_loss, {
+            'emotion_precision' : emotion_precision,
+            'emotion_accuracy' : emotion_accuracy,
+            'sentimental_precision' : sentimental_precision,
+            'sentimental_accuracy' : sentimental_accuracy
+        }
+
+
 
 
 
