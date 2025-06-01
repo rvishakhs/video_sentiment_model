@@ -1,6 +1,11 @@
 from sagemaker.pytorch import PyTorch
 from sagemaker.debugger import TensorBoardOutputConfig
 
+import sagemaker
+
+sess = sagemaker.Session(default_bucket="feedback-analysis-saas")
+
+
 def start_training():
     print("Starting SageMaker training job...")
     tensorboard_config = TensorBoardOutputConfig(
@@ -16,6 +21,7 @@ def start_training():
         instance_type="ml.g5.xlarge",
         framework_version="2.5.1",
         py_version="py312",
+        sagemaker_session=sess,
         hyperparameters={
             "epochs": 10,
             "batch_size": 32,
