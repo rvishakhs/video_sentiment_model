@@ -4,14 +4,14 @@ from sagemaker.debugger import TensorBoardOutputConfig
 def start_training():
     print("Starting SageMaker training job...")
     tensorboard_config = TensorBoardOutputConfig(
-        s3_output_path="bucket-name/tensorboard",
+        s3_output_path="s3://feedback-analysis-saas/tensorboard",
         container_local_output_path="/opt/ml/output/tensorboard",
     )
 
     estimator = PyTorch(
         entry_point="train_aws.py",
         source_dir="training",
-        role="my-role",
+        role="arn:aws:iam::973787923108:role/feedback-analysis-execution-role",
         instance_count=1,
         instance_type="ml.g5.xlarge",
         framework_version="2.5.1",
@@ -26,7 +26,7 @@ def start_training():
 
     # start the training job
     estimator.fit({
-        "training": "s3://bucket-name/dataset/train",
-        "validation": "s3://bucket-name/dataset/dev",
-        "test": "s3://bucket-name/dataset/test"
+        "training": "s3://feedback-analysis-saas/dataset/train",
+        "validation": "s3://feedback-analysis-saas/dataset/dev",
+        "test": "s3://feedback-analysis-saas/dataset/test"
     }, wait=True)
