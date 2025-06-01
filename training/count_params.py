@@ -51,5 +51,7 @@ if __name__ == "__main__":
         print(f"{component:20s}: {count:,} parameters")
 
     print(f"\nTotal number of trainable parameters: {total_params:,}")
+    
 
+    #requires-python = ">=3.12"
 

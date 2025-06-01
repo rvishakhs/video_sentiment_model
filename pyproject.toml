@@ -37,3 +37,5 @@ torchaudio = {source = "pytorch"}
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+sagemaker = "^2.245.0"
+graphql-relay = { version = "^3.1", markers = "python_version >= '3.12' and python_version < '4.0'" }

@@ -4,9 +4,11 @@ import argparse
 import torchaudio
 import torch
 import tqdm
+import sys
 
 from training.meld_training import prepare_dataloaders
 from models import MultimodalSentimentalModel, Multimodel_trainer
+from install_ffmpeg import install_ffmpeg
 
 # initialise parameters
 SM_MODEL_DIR = os.environ.get('SM_MODEL_DIR', '.')
@@ -33,6 +35,9 @@ def parse_args():
 
 def main():
     # Install ffmpeg
+    if not install_ffmpeg():
+        print("FFMPEG installation failed. Exiting.")
+        sys.exit(1)
 
     print("Available audio backends:")
     print(str(torchaudio.list_audio_backends()))
@@ -123,15 +128,6 @@ def main():
             {"Name": "test: sentimental_accuracy", "Value":test_metrics["sentimental_accuracy"]},
         ]
     }))
-
-    
-
-
-
-
-    
-
-
 
 
 
