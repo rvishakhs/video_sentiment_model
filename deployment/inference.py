@@ -1,15 +1,23 @@
+import json
 import os
 import subprocess
+import sys
+import boto3
 import cv2
 import numpy as np
 import torch
 import torchaudio
-from models import MultimodalSentimentalModel
 import whisper
 from transformers import AutoTokenizer
 
-# Mapping of emotional and sentimental labels to indices
+from model import MultimodalSentimentalModel
 
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+
+
+# Mapping of emotional and sentimental labels to indices
 EMO_MAP = {
     0: "anger",
     1: "disgust",
@@ -26,6 +34,67 @@ SENTI_MAP = {
     2: "positive",
 }
 
+
+import subprocess
+import sys
+
+# def install_ffmpeg():
+#     print("starting to install FFMPEG")
+
+#     subprocess.check_call([sys.executable, "-m", "pip", 
+#                            "install", "--upgrade", "pip"])
+    
+#     subprocess.check_call([sys.executable, "-m", "pip", 
+#                            "install", "--upgrade", "setuptools"])
+    
+#     try:
+#         subprocess.check_call([sys.executable, "-m", "pip", 
+#                         "install", "ffmpeg-python"])
+#         print("FFMPEG installed successfully.")
+#     except subprocess.CalledProcessError as e:
+#         print(f"Error installing FFMPEG via pip: {e}")
+
+#     try:
+#         subprocess.check_call([
+#             "wget",
+#             "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/ffmpeg/7:7.1.1-1ubuntu2/ffmpeg_7.1.1.orig.tar.xz"
+#             "-O", "/tmp/ffmpeg.tar.xz"
+#         ])
+#         subprocess.check_call([
+#             "tar",
+#             "-xf", "/tmp/ffmpeg.tar.xz",
+#             "-C", "/tmp"
+#         ])
+
+#         result = subprocess.run([
+#             "find", "/tmp",
+#             "-name", "ffmpeg",
+#             "type", "f",           
+#         ], capture_output=True, text=True)
+
+#         ffmpeg_path = result.stdout.strip()
+
+#         subprocess.check_call([
+#             "sudo", "cp", ffmpeg_path, "/usr/local/bin/ffmpeg"
+#         ])
+
+#         subprocess.check_call([
+#             "sudo", "chmod", "+x", "/usr/local/bin/ffmpeg"
+#         ])
+
+#         print("FFMPEG installed successfully from source.")
+#     except subprocess.CalledProcessError as e:
+#         print(f"Error installing FFMPEG from source: {e}")
+
+#     try:
+#         result = subprocess.run([
+#             "ffmpeg", "-version"
+#         ], capture_output=True, text=True)
+#         print(f"FFMPEG version:{result.stdout}")
+#         return True
+#     except subprocess.CalledProcessError as e:
+#         print(f"Error checking FFMPEG version: {e}")
+#         return False
 
 
 
@@ -115,6 +184,9 @@ class Audio_processing:
             else:
                 mel_spec = mel_spec[:, :, :300]
 
+            if mel_spec.shape[0] == 1:
+                mel_spec = mel_spec.squeeze(0)
+
             return mel_spec
         except subprocess.CalledProcessError as e:
             raise ValueError(f"Error happend whicle extracting audio as subprocessing {e}")
@@ -152,11 +224,32 @@ class VideoUtteranceProcessor:
             
         return segment_path
 
+# def download_video_from_s3(s3_uri):
+#     s3_client = boto3.client('s3')    
+
+
+# def input_fn(request_body, request_content_type):
+#     if request_content_type == 'application/json':
+#         input_data = json.loads(request_body)
+#         s3_uri = input_data['video_path']
+#         local_path = download_video_from_s3(s3_uri)
+#         return {"video_path": local_path}
+    
+#     else:
+#         raise ValueError(f"Unsupported content type: {request_content_type}")
+
+
 def load_model(model_dir):
+
+    # Load the model in sagemaker inference environment
+    # if not install_ffmpeg():
+    #     raise RuntimeError("FFMPEG installation failed. Please check the logs for details.")
+    
 
     # Check the device 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = MultimodalSentimentalModel()
+    model = model.to(device)
 
     model_path = os.path.join(model_dir, 'model.pth')
     if not os.path.exists(model_path):
@@ -171,7 +264,7 @@ def load_model(model_dir):
     return {
         'model' : model,
         'tokenizer' : AutoTokenizer.from_pretrained("bert-base-uncased"),
-        'transcriber' : whisper.load_model("base.en").to(device),
+        'transcriber' : whisper.load_model("base").to(device),
         'device' : device
     }
 
@@ -189,6 +282,9 @@ def predict_fn(input_data, model_dict):
 
     predictions = []
 
+    if not result['segments']:
+        raise ValueError(f"No segments found in transcription result for {video_path}")
+
     for segment in result['segments']:
         try: 
             segment_path = video_otternce.extract_segments(video_path,
@@ -205,13 +301,27 @@ def predict_fn(input_data, model_dict):
                                     return_tensors='pt')
             
             #  Move the tensors to the device
-            text_inputs = {K: v.to(device) for k, v in text_inputs.items()}
+            # text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
+            text_inputs = {k: v.to(device) for k, v in text_inputs.items() if k != 'token_type_ids'}
             video_frames = video_frames.unsqueeze(0).to(device)
             audio_features = audio_features.unsqueeze(0).to(device)
+
+            if video_frames is None or audio_features is None:
+                raise ValueError("Video or audio features are None")
+            
+            print("Text inputs keys:", list(text_inputs.keys()))
+            for k, v in text_inputs.items():
+                print(f"{k}: type={type(v)}, shape={v.shape}, device={v.device}")
+            print(f"Video frames: type={type(video_frames)}, shape={video_frames.shape}, device={video_frames.device}")
+            print(f"Audio features: type={type(audio_features)}, shape={audio_features.shape}, device={audio_features.device}")
+
 
             #  Predicting the sentiment and emotion
             with torch.inference_mode():
                 outputs = model(text_inputs, video_frames, audio_features)
+                if outputs['emotion_logits'] is None or outputs['sentiment_logits'] is None:
+                    raise ValueError("Model returned None for logits")
+                
                 emotion_probs = torch.softmax(outputs['emotion_logits'], dim=1)[0]
                 sentiment_probs = torch.softmax(outputs['sentiment_logits'], dim=1)[0]
 
@@ -261,4 +371,4 @@ def process_local_video(video_path, model_dir="model"):
         print("\n")
 
 if __name__ == "__main__":
-    process_local_video("sample.mp4")
+    process_local_video("dia7_utt8.mp4")

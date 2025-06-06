@@ -8,6 +8,8 @@ from datetime import datetime
 import os
 import tensorboard
 
+from meld_training import MELDDataset
+
 class TextEncoder(nn.Module):    
     def __init__(self):
         super().__init__()
@@ -455,7 +457,7 @@ class Multimodel_trainer(nn.Module):
 
 
 
-
-
-
-#if __name__ == "__main__":
+if __name__ == "__main__":
+    dataset = MELDDataset(
+        '../dataset/dev/dev_sent_emo.csv', '../dataset/dev/dev_splits_complete'
+    )
