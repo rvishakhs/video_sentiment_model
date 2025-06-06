@@ -1,9 +1,12 @@
 from sagemaker.pytorch import PyTorch
 from sagemaker.debugger import TensorBoardOutputConfig
 
-import sagemaker
 
+import sagemaker
+print(sagemaker.__version__)
 sess = sagemaker.Session(default_bucket="feedback-analysis-saas")
+
+
 
 
 def start_training():
@@ -20,7 +23,7 @@ def start_training():
         instance_count=1,
         instance_type="ml.g5.xlarge",
         framework_version="2.5.1",
-        py_version="py312",
+        py_version="py311",
         sagemaker_session=sess,
         hyperparameters={
             "epochs": 10,
@@ -36,3 +39,7 @@ def start_training():
         "validation": "s3://feedback-analysis-saas/dataset/dev",
         "test": "s3://feedback-analysis-saas/dataset/test"
     }, wait=True)
+
+if __name__ == "__main__":
+    start_training()
+    print("Training job started successfully.")
