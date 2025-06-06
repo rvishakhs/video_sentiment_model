@@ -3,7 +3,7 @@ import os
 import argparse
 import torchaudio
 import torch
-import tqdm
+from tqdm import tqdm
 import sys
 
 from training.meld_training import prepare_dataloaders

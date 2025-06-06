@@ -4,7 +4,7 @@ from transformers import BertModel
 from torchvision import models as vision_models
 from sklearn.metrics import precision_score, accuracy_score
 from torch.utils.tensorboard import SummaryWriter
-import datetime
+from datetime import datetime
 import os
 import tensorboard
 
@@ -60,9 +60,11 @@ class VideoEncoder(nn.Module):
         )
 
     def forward(self, video_frames):
-        # [batch_size, frames, channels, height, width] -> [batch_size, channels, height, width]
-        video_frames = video_frames.transpose(1, 2)
-        return self.backbone(video_frames)
+        if isinstance(video_frames, tuple):
+            video_frames = video_frames[0]
+            # [batch_size, frames, channels, height, width] -> [batch_size, channels, height, width]
+            video_frames = video_frames.transpose(1, 2)
+            return self.backbone(video_frames)
     
 
 class AudioEncoder(nn.Module):
@@ -93,11 +95,13 @@ class AudioEncoder(nn.Module):
         )
 
     def forward(self, x):
-        x = x.squeeze(1)  # Remove the channel dimension
+        if isinstance(x, tuple):
+            x = x[0]  # adjust index if necessary
+            x = x.squeeze(1)
 
-        audio_features = self.conv_layers(x)  # Apply convolutional layers
+            audio_features = self.conv_layers(x)  # Apply convolutional layers
 
-        return self.projection(audio_features.squeeze(-1))
+            return self.projection(audio_features.squeeze(-1))
     
 
 class MultimodalSentimentalModel(nn.Module):
@@ -162,6 +166,31 @@ class MultimodalSentimentalModel(nn.Module):
             'emotion_logits': emotion_logits,
             'sentiment_logits': sentiment_logits
         }
+    
+# def compute_class_weights(dataset):
+#     emotion_counts = torch.zeros(7)  # Assuming 7 emotions
+#     sentiment_counts = torch.zeros(3)  # Assuming 3 sentiments
+
+#     skipped = 0
+
+#     total = len(dataset)
+#     for i in range(total):
+#         sample = dataset[i]
+
+#         if sample is None:
+#             skipped += 1
+#             continue
+
+#         emotional_label = sample['emotion_label']
+#         sentiment_label = sample['sentiment_label']
+#         emotion_counts[emotional_label] += 1
+#         sentiment_counts[sentiment_label] += 1
+
+#     valid = total - skipped
+#     print(f"Skipped {skipped} samples out of {total} due to missing labels.")
+
+
+
     
 class Multimodel_trainer(nn.Module):
     def __init__(self, model, train_loader, val_loader, *args, **kwargs):
@@ -283,14 +312,30 @@ class Multimodel_trainer(nn.Module):
             # Forward pass
             outputs = self.model(text_inputs, video_frames, audio_features)
 
-            # Calculate the losses using cross entropy losses 
-            emotional_loss = self.emotion_criterion(
-                outputs['emotion_logits'], emotion_label
-            )
 
-            sentimental_loss = self.sentiment_criterion(
-                outputs['sentiment_logits'], sentiment_label
-            )
+            # Calculate the losses using cross entropy losses 
+            # if isinstance(emotion_label, tuple):
+            #     emotion_label = emotion_label[0] 
+            #     emotional_loss = self.emotion_criterion(
+            #         outputs['emotion_logits'], emotion_label
+            #     )
+
+            # if isinstance(sentiment_label, tuple):
+            #     sentiment_label = sentiment_label[0]
+            #     sentimental_loss = self.sentiment_criterion(
+            #         outputs['sentiment_logits'], sentiment_label
+            #     )
+
+            # Unwrap if tuple else use directly
+            if isinstance(emotion_label, tuple):
+                emotion_label = emotion_label[0]
+
+            if isinstance(sentiment_label, tuple):
+                sentiment_label = sentiment_label[0]
+
+            # Compute losses unconditionally
+            emotional_loss = self.emotion_criterion(outputs['emotion_logits'], emotion_label)
+            sentimental_loss = self.sentiment_criterion(outputs['sentiment_logits'], sentiment_label)
 
             total_loss = emotional_loss + sentimental_loss
 
