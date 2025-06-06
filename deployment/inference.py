@@ -4,9 +4,30 @@ import cv2
 import numpy as np
 import torch
 import torchaudio
-from training.models import MultimodalSentimentalModel
+from models import MultimodalSentimentalModel
 import whisper
 from transformers import AutoTokenizer
+
+# Mapping of emotional and sentimental labels to indices
+
+EMO_MAP = {
+    0: "anger",
+    1: "disgust",
+    2: "fear",
+    3: "joy",
+    4: "neutral",
+    5: "sadness",
+    6: "surprise",
+}
+
+SENTI_MAP = {
+    0: "negative",
+    1: "neutral",
+    2: "positive",
+}
+
+
+
 
 class Video_processing: 
     def video_frames(self, video_path):
@@ -122,7 +143,7 @@ class VideoUtteranceProcessor:
             '-to', str(end_time),
             '-c:v', 'libx264',
             '-c:a', 'aac',
-            '-y'
+            '-y',
             segment_path
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -154,5 +175,90 @@ def load_model(model_dir):
         'device' : device
     }
 
-if __name__ == "__main__":
+
+def predict_fn(input_data, model_dict):
+    model = model_dict['model']
+    tokrnizer = model_dict['tokenizer']
+    device = model_dict['device']
+    video_path = input_data['video_path']
+
+
+    result = model_dict['transcriber'].transcribe(video_path, word_timestamps=True)
+
+    video_otternce = VideoUtteranceProcessor()
+
+    predictions = []
+
+    for segment in result['segments']:
+        try: 
+            segment_path = video_otternce.extract_segments(video_path,
+                                                           segment["start"],
+                                                           segment["end"],
+                                                           )
+            
+            video_frames = video_otternce.video_processor.video_frames(segment_path)
+            audio_features = video_otternce.audio_processor.audio_features(segment_path)
+            text_inputs = tokrnizer(segment["text"],
+                                    padding='max_length',
+                                    truncation=True,
+                                    max_length=128,
+                                    return_tensors='pt')
+            
+            #  Move the tensors to the device
+            text_inputs = {K: v.to(device) for k, v in text_inputs.items()}
+            video_frames = video_frames.unsqueeze(0).to(device)
+            audio_features = audio_features.unsqueeze(0).to(device)
+
+            #  Predicting the sentiment and emotion
+            with torch.inference_mode():
+                outputs = model(text_inputs, video_frames, audio_features)
+                emotion_probs = torch.softmax(outputs['emotion_logits'], dim=1)[0]
+                sentiment_probs = torch.softmax(outputs['sentiment_logits'], dim=1)[0]
+
+                #  Get the predicted emotion and sentiment
+
+                emotion_values, emotion_indices = torch.topk(emotion_probs, k=3)
+                sentiment_values, sentiment_indices = torch.topk(sentiment_probs, k=3)
+
+            predictions.append({
+                "start_time": segment["start"],
+                "end_time": segment["end"],
+                "text": segment["text"],
+                "emotions" : [
+                    {"label": EMO_MAP[idx.item()], "confidence": conf.item()} for idx, conf in zip(emotion_indices, emotion_values)
+                ],
+                "sentiments" : [
+                    {"label": SENTI_MAP[idx.item()], "confidence": conf.item()} for idx, conf in zip(sentiment_indices, sentiment_values)
+                ],
+            })
+            
+
+        except Exception as e:
+            print(f"Error processing segment {segment['id']} in video {video_path}: {e}")
+        finally: 
+            if os.path.exists(segment_path):
+                os.remove(segment_path)
+
+    return {
+        "utterances": predictions,
+    }
+
+def process_local_video(video_path, model_dir="model"):
+    model_dict = load_model(model_dir)
+    input_data = {"video_path": video_path}
     
+    predictions = predict_fn(input_data, model_dict)
+
+    for utterance in predictions['utterances']:
+        print(f"Start: {utterance['start_time']:.2f}s, End: {utterance['end_time']:.2f}s")
+        print(f"Text: {utterance['text']}")
+        print("Emotions:")
+        for emo in utterance['emotions']:
+            print(f"  - {emo['label']} ({emo['confidence']:.2f})")
+        print("Sentiments:")
+        for senti in utterance['sentiments']:
+            print(f"  - {senti['label']} ({senti['confidence']:.2f})")
+        print("\n")
+
+if __name__ == "__main__":
+    process_local_video("sample.mp4")
