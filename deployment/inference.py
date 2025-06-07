@@ -301,8 +301,8 @@ def predict_fn(input_data, model_dict):
                                     return_tensors='pt')
             
             #  Move the tensors to the device
-            # text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
-            text_inputs = {k: v.to(device) for k, v in text_inputs.items() if k != 'token_type_ids'}
+
+            text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
             video_frames = video_frames.unsqueeze(0).to(device)
             audio_features = audio_features.unsqueeze(0).to(device)
 
@@ -342,7 +342,6 @@ def predict_fn(input_data, model_dict):
                 ],
             })
             
-
         except Exception as e:
             print(f"Error processing segment {segment['id']} in video {video_path}: {e}")
         finally: 
@@ -371,4 +370,4 @@ def process_local_video(video_path, model_dir="model"):
         print("\n")
 
 if __name__ == "__main__":
-    process_local_video("dia7_utt8.mp4")
+    process_local_video("dia4_utt12.mp4")

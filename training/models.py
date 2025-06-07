@@ -62,11 +62,9 @@ class VideoEncoder(nn.Module):
         )
 
     def forward(self, video_frames):
-        if isinstance(video_frames, tuple):
-            video_frames = video_frames[0]
-            # [batch_size, frames, channels, height, width] -> [batch_size, channels, height, width]
-            video_frames = video_frames.transpose(1, 2)
-            return self.backbone(video_frames)
+        # [batch_size, frames, channels, height, width] -> [batch_size, channels, height, width]
+        video_frames = video_frames.transpose(1, 2)
+        return self.backbone(video_frames)
     
 
 class AudioEncoder(nn.Module):
@@ -97,13 +95,11 @@ class AudioEncoder(nn.Module):
         )
 
     def forward(self, x):
-        if isinstance(x, tuple):
-            x = x[0]  # adjust index if necessary
-            x = x.squeeze(1)
+        x = x.squeeze(1)
 
-            audio_features = self.conv_layers(x)  # Apply convolutional layers
+        audio_features = self.conv_layers(x)  # Apply convolutional layers
 
-            return self.projection(audio_features.squeeze(-1))
+        return self.projection(audio_features.squeeze(-1))
     
 
 class MultimodalSentimentalModel(nn.Module):
